@@ -282,9 +282,8 @@ function saveLocal(){
 function applyConfig(){document.querySelector('#header h1').textContent='🌳 '+config.title;document.title=config.title;}
 function checkSettings(){
   document.getElementById('settings-banner').style.display=config.scriptUrl?'none':'block';
-  // Only auto-pull from Sheets if local has NO people at all (first time setup)
-  // Otherwise local is always the source of truth — use Push button to sync manually
-  if(config.scriptUrl && people.length===0) syncFromSheets();
+  // Always pull from Sheets on load — Sheets is the source of truth
+  if(config.scriptUrl) syncFromSheets();
 }
 
 function switchView(view){
@@ -1021,17 +1020,32 @@ async function syncFromSheets(){
   try{
     const res=await fetch(config.scriptUrl+'?action=get',{mode:'cors'});
     const data=await res.json();
-    if(data&&data.people&&data.people.length){
-      const seenIds=new Set();
-      people=data.people.filter(p=>{
-        if(!p.id||seenIds.has(p.id))return false;
-        seenIds.add(p.id);return true;
-      });
+    if(!data||!data.people||!data.people.length){checkDuplicates();return;}
+
+    // Deduplicate by id
+    const seenIds=new Set();
+    const sheetPeople=data.people.filter(p=>{
+      if(!p.id||seenIds.has(p.id))return false;
+      seenIds.add(p.id);return true;
+    });
+
+    // Count connections in sheet vs local
+    const countConn=arr=>arr.reduce((s,p)=>s+[p.parentId,p.parent2Id,p.spouseId].filter(x=>x&&x.trim()).length,0);
+    const sheetConn=countConn(sheetPeople);
+    const localConn=countConn(people);
+
+    // Only replace local if sheet has data AND has equal or more connections
+    // This prevents an empty/stale sheet from wiping locally-built connections
+    if(sheetPeople.length>0 && sheetConn>=localConn){
+      people=sheetPeople;
       saveLocal();
       if(currentView==='cards')renderCards();
       else if(currentView==='tree')renderTree();
       else renderStats();
-      showToast('Loaded from Sheets ✓');
+      showToast('Synced ✓');
+    } else if(localConn>sheetConn){
+      // Local has more connections — push local up to fix the sheet silently
+      syncToSheets();
     }
   }catch(e){}
   checkDuplicates();
