@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mi Familia</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#fdf8f2;--bark:#5c3d2e;--bark-light:#8b6048;
+    --leaf:#3a6b4a;--leaf-light:#5a9b6a;
+    --petal:#e8c4a0;--petal-dark:#c9956a;
+    --text:#2c1e12;--text-soft:#7a5c42;
+    --card-bg:#fffdf9;--card-border:#e0c9b0;
+    --line:#b89070;--shadow:rgba(92,61,46,0.15);
+    --gold:#c9a84c;--deceased:#8a7a6a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Lato',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow:hidden;}
+  #header{position:fixed;top:0;left:0;right:0;z-index:100;background:var(--bark);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px var(--shadow);}
+  #header h1{font-family:'Playfair Display',serif;font-size:1.15rem;color:var(--petal);}
+  #view-toggle{display:flex;gap:3px;background:rgba(0,0,0,0.2);border-radius:20px;padding:3px;}
+  .vtbtn{background:none;border:none;color:var(--petal);padding:5px 11px;border-radius:16px;font-family:'Lato',sans-serif;font-size:0.72rem;font-weight:700;cursor:pointer;opacity:0.6;transition:all 0.2s;}
+  .vtbtn.active{background:var(--bark-light);opacity:1;}
+  #header-right{display:flex;gap:7px;align-items:center;}
+  .hdr-btn{background:var(--bark-light);border:none;color:var(--petal);padding:6px 11px;border-radius:18px;font-family:'Lato',sans-serif;font-size:0.72rem;font-weight:700;cursor:pointer;}
+  .hdr-btn.green{background:var(--leaf);}
+  #search-bar{position:fixed;top:52px;left:0;right:0;z-index:99;background:var(--card-bg);border-bottom:1px solid var(--card-border);padding:8px 14px;display:none;}
+  #search-bar input{width:100%;padding:8px 14px;border:1.5px solid var(--card-border);border-radius:20px;font-family:'Lato',sans-serif;font-size:0.88rem;background:var(--bg);color:var(--text);outline:none;}
+  #search-bar input:focus{border-color:var(--leaf);}
+  #canvas{position:fixed;top:52px;left:0;right:0;bottom:0;overflow:hidden;cursor:grab;display:none;}
+  #canvas:active{cursor:grabbing;}
+  #canvas svg{width:100%;height:100%;}
+  #grid-view{position:fixed;top:52px;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 10px 80px;}
+  .family-section{margin-bottom:16px;}
+  .family-heading{font-family:'Playfair Display',serif;font-size:0.95rem;color:var(--bark);padding:10px 4px 6px;border-bottom:2px solid var(--card-border);margin-bottom:8px;}
+  .family-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px;}
+  .person-card{background:var(--card-bg);border:1.5px solid var(--card-border);border-radius:12px;padding:13px 11px;cursor:pointer;transition:all 0.2s;box-shadow:0 1px 6px var(--shadow);position:relative;}
+  .person-card:active{transform:scale(0.97);}
+  .person-card.deceased{opacity:0.6;border-style:dashed;}
+  .card-icon{font-size:1.3rem;margin-bottom:5px;}
+  .card-name{font-family:'Playfair Display',serif;font-size:0.82rem;font-weight:600;color:var(--text);line-height:1.3;margin-bottom:3px;}
+  .card-birth{font-size:0.7rem;color:var(--text-soft);}
+  .card-location{font-size:0.68rem;color:var(--leaf);margin-top:2px;}
+  .card-deceased-badge{position:absolute;top:7px;right:7px;font-size:0.58rem;background:var(--deceased);color:white;padding:2px 5px;border-radius:8px;font-weight:700;}
+  .card-connections{margin-top:5px;font-size:0.65rem;color:var(--text-soft);border-top:1px solid var(--card-border);padding-top:4px;}
+  .node-group{cursor:pointer;}
+  .node-card{fill:var(--card-bg);stroke:var(--card-border);stroke-width:1.5;filter:drop-shadow(0 2px 6px var(--shadow));}
+  .node-group:hover .node-card{stroke:var(--gold);stroke-width:2;}
+  .node-group.deceased-node .node-card{stroke:var(--deceased);stroke-dasharray:4,2;}
+  .node-name{font-family:'Playfair Display',serif;font-size:12px;font-weight:600;fill:var(--text);text-anchor:middle;}
+  .node-dates{font-family:'Lato',sans-serif;font-size:10px;fill:var(--text-soft);text-anchor:middle;}
+  .node-icon{font-size:15px;text-anchor:middle;dominant-baseline:middle;}
+  .link{fill:none;stroke:var(--line);stroke-width:1.8;}
+  .spouse-link{fill:none;stroke:var(--gold);stroke-width:2.5;}
+  .spouse-heart{font-size:11px;text-anchor:middle;dominant-baseline:middle;}
+  #detail-panel{position:fixed;bottom:-100%;right:0;left:0;background:var(--card-bg);border-top:2px solid var(--card-border);border-radius:20px 20px 0 0;padding:18px 18px 34px;box-shadow:0 -4px 24px var(--shadow);transition:bottom 0.35s cubic-bezier(0.34,1.56,0.64,1);z-index:200;max-height:75vh;overflow-y:auto;}
+  #detail-panel.open{bottom:0;}
+  .drag-handle{width:38px;height:4px;background:var(--card-border);border-radius:2px;margin:0 auto 12px;}
+  #detail-name{font-family:'Playfair Display',serif;font-size:1.35rem;color:var(--bark);margin-bottom:2px;}
+  #detail-meta{color:var(--text-soft);font-size:0.8rem;margin-bottom:8px;}
+  #detail-phone{font-size:0.82rem;color:var(--leaf);margin-bottom:8px;}
+  #detail-bio{font-size:0.85rem;line-height:1.6;margin-bottom:8px;color:var(--text-soft);font-style:italic;}
+  #detail-relations{font-size:0.8rem;color:var(--text-soft);margin-bottom:12px;}
+  #detail-relations span{color:var(--bark);font-weight:700;}
+  #detail-relations .spouse-tag{color:var(--gold);font-weight:700;}
+  #detail-close{position:absolute;top:16px;right:16px;background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-soft);}
+  #detail-edit-btn{background:var(--leaf);color:white;border:none;padding:10px 20px;border-radius:20px;font-family:'Lato',sans-serif;font-weight:700;font-size:0.83rem;cursor:pointer;width:100%;}
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(44,30,18,0.55);z-index:400;align-items:center;justify-content:center;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:var(--card-bg);border-radius:16px;padding:22px 18px;width:min(420px,92vw);box-shadow:0 8px 40px var(--shadow);animation:popIn 0.25s ease;max-height:90vh;overflow-y:auto;}
+  @keyframes popIn{from{transform:scale(0.9);opacity:0}to{transform:scale(1);opacity:1}}
+  .modal h2{font-family:'Playfair Display',serif;color:var(--bark);margin-bottom:12px;font-size:1.1rem;}
+  .form-group{margin-bottom:10px;}
+  .form-group label{display:block;font-size:0.72rem;font-weight:700;color:var(--text-soft);margin-bottom:3px;letter-spacing:0.06em;text-transform:uppercase;}
+  .form-group input,.form-group textarea,.form-group select{width:100%;padding:8px 11px;border:1.5px solid var(--card-border);border-radius:10px;font-family:'Lato',sans-serif;font-size:0.85rem;background:var(--bg);color:var(--text);outline:none;}
+  .form-group input:focus,.form-group textarea:focus{border-color:var(--leaf);}
+  .form-group textarea{resize:vertical;min-height:56px;}
+  .modal-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+  .btn-primary{flex:1;background:var(--leaf);color:white;border:none;padding:10px;border-radius:10px;font-family:'Lato',sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;}
+  .btn-secondary{flex:1;background:none;color:var(--text-soft);border:1.5px solid var(--card-border);padding:10px;border-radius:10px;font-family:'Lato',sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;}
+  .btn-danger{background:#c0392b;color:white;border:none;padding:10px 13px;border-radius:10px;font-family:'Lato',sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;}
+  .pin-dots{display:flex;gap:12px;justify-content:center;margin:13px 0;}
+  .pin-dot{width:13px;height:13px;border-radius:50%;background:var(--card-border);transition:background 0.15s;}
+  .pin-dot.filled{background:var(--bark);}
+  .pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:7px;}
+  .pin-key{background:var(--bg);border:1.5px solid var(--card-border);border-radius:10px;padding:13px;font-family:'Playfair Display',serif;font-size:1rem;cursor:pointer;text-align:center;}
+  .pin-key:hover{background:var(--petal);}
+  .pin-key.del{font-size:0.78rem;color:#c0392b;}
+  #pin-error{color:#c0392b;font-size:0.76rem;text-align:center;min-height:16px;margin-top:3px;}
+  #zoom-controls{position:fixed;bottom:24px;right:14px;display:flex;flex-direction:column;gap:6px;z-index:150;}
+  .zoom-btn{width:38px;height:38px;background:var(--bark);color:var(--petal);border:none;border-radius:10px;font-size:1.1rem;cursor:pointer;box-shadow:0 2px 8px var(--shadow);}
+  #fab{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--leaf);color:white;border:none;padding:11px 22px;border-radius:24px;font-family:'Lato',sans-serif;font-weight:700;font-size:0.87rem;cursor:pointer;box-shadow:0 4px 16px rgba(58,107,74,0.4);z-index:150;}
+  #toast{position:fixed;bottom:78px;left:50%;transform:translateX(-50%);background:var(--bark);color:var(--petal);padding:8px 16px;border-radius:20px;font-size:0.8rem;font-weight:700;opacity:0;transition:opacity 0.3s;z-index:500;pointer-events:none;white-space:nowrap;}
+  #toast.show{opacity:1;}
+  #settings-banner{display:none;position:fixed;top:52px;left:0;right:0;background:#fff3cd;border-bottom:1px solid #ffc107;padding:7px 12px;z-index:98;font-size:0.73rem;color:#856404;text-align:center;}
+  #settings-banner a{color:var(--leaf);font-weight:700;cursor:pointer;}
+  #no-tree-msg{position:fixed;top:55%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--text-soft);font-family:'Playfair Display',serif;display:none;padding:20px;}
+  #no-tree-msg h2{font-size:1.1rem;margin-bottom:6px;}
+  #no-tree-msg p{font-size:0.8rem;font-family:'Lato',sans-serif;line-height:1.5;}
+  /* STATS VIEW */
+  #stats-view{position:fixed;top:52px;left:0;right:0;bottom:0;overflow-y:auto;padding:12px 12px 80px;display:none;}
+  .stats-section{margin-bottom:14px;}
+  .stats-heading{font-family:'Playfair Display',serif;font-size:0.9rem;color:var(--bark);padding:8px 4px 6px;border-bottom:2px solid var(--card-border);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px;}
+  .stat-card{background:var(--card-bg);border:1.5px solid var(--card-border);border-radius:12px;padding:14px 12px;text-align:center;box-shadow:0 1px 6px var(--shadow);}
+  .stat-number{font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--bark);line-height:1;}
+  .stat-label{font-size:0.7rem;color:var(--text-soft);margin-top:4px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;}
+  .stat-sub{font-size:0.65rem;color:var(--text-soft);margin-top:2px;}
+  .stat-card.accent-green{border-color:var(--leaf-light);background:linear-gradient(135deg,#fffdf9,#f0f8f2);}
+  .stat-card.accent-gold{border-color:var(--gold);background:linear-gradient(135deg,#fffdf9,#fdf8ec);}
+  .stat-card.accent-bark{border-color:var(--bark-light);background:linear-gradient(135deg,#fffdf9,#fdf4ee);}
+  .stat-card.accent-grey{border-color:var(--deceased);background:linear-gradient(135deg,#fffdf9,#f5f2ef);}
+  .surname-bar-wrap{background:var(--card-bg);border:1.5px solid var(--card-border);border-radius:12px;padding:14px;box-shadow:0 1px 6px var(--shadow);}
+  .surname-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .surname-row:last-child{margin-bottom:0;}
+  .surname-name{font-family:'Playfair Display',serif;font-size:0.8rem;color:var(--text);min-width:80px;}
+  .surname-bar-bg{flex:1;background:var(--bg);border-radius:6px;height:12px;overflow:hidden;}
+  .surname-bar-fill{height:100%;background:var(--bark-light);border-radius:6px;transition:width 0.5s ease;}
+  .surname-count{font-size:0.72rem;color:var(--text-soft);font-weight:700;min-width:24px;text-align:right;}
+  .location-pill{display:inline-block;background:var(--bg);border:1px solid var(--card-border);border-radius:14px;padding:4px 10px;font-size:0.72rem;color:var(--text-soft);margin:3px;}
+  .stats-updated{text-align:center;font-size:0.68rem;color:var(--text-soft);padding:8px 0 0;}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🌳 Mi Familia</h1>
+  <div id="view-toggle">
+    <button class="vtbtn active" id="btn-cards" onclick="switchView('cards')">Cards</button>
+    <button class="vtbtn" id="btn-tree" onclick="switchView('tree')">Tree</button>
+    <button class="vtbtn" id="btn-stats" onclick="switchView('stats')">Stats</button>
+  </div>
+  <div id="header-right">
+    <button class="hdr-btn green" onclick="openAddModal()">+ Add</button>
+    <button class="hdr-btn" onclick="openSettingsModal()">⚙</button>
+  </div>
+</div>
+
+<div id="settings-banner">⚠ Connect Google Sheets to sync across all devices. <a onclick="openSettingsModal()">Set up →</a></div>
+<div id="duplicate-banner" style="display:none;position:fixed;top:52px;left:0;right:0;background:#fdecea;border-bottom:1px solid #e57373;padding:8px 14px;z-index:97;font-size:0.73rem;color:#b71c1c;">
+  <span id="duplicate-msg"></span>
+  <a id="duplicate-link" style="margin-left:8px;color:#b71c1c;font-weight:700;cursor:pointer;text-decoration:underline;">Review →</a>
+</div>
+<div id="search-bar"><input id="search-input" type="search" placeholder="Search family members…" oninput="filterCards()"></div>
+
+<div id="grid-view"></div>
+<div id="canvas"><svg id="tree-svg"></svg></div>
+<div id="stats-view"></div>
+<div id="no-tree-msg">
+  <h2>Tree view needs connections</h2>
+  <p>Go to Cards view → tap a person → Edit → assign a <strong>Parent</strong> to start building the tree structure.</p>
+</div>
+
+<div id="zoom-controls" style="display:none">
+  <button class="zoom-btn" onclick="zoomIn()">+</button>
+  <button class="zoom-btn" onclick="zoomReset()">⌂</button>
+  <button class="zoom-btn" onclick="zoomOut()">−</button>
+</div>
+<button id="fab" onclick="openAddModal()">+ Add Person</button>
+
+<div id="detail-panel">
+  <div class="drag-handle"></div>
+  <button id="detail-close" onclick="closeDetail()">✕</button>
+  <div id="detail-name"></div>
+  <div id="detail-meta"></div>
+  <div id="detail-phone"></div>
+  <div id="detail-bio"></div>
+  <div id="detail-relations"></div>
+  <div style="display:flex;gap:8px;margin-top:4px;">
+    <button id="detail-edit-btn" onclick="editSelected()" style="flex:1;">✏ Edit this person</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="pin-modal">
+  <div class="modal">
+    <h2 id="pin-modal-title">🔒 Enter PIN to Edit</h2>
+    <p id="pin-subtitle" style="font-size:0.75rem;color:var(--text-soft);margin-bottom:4px;text-align:center;">Enter the family edit PIN to continue.</p>
+    <div class="pin-dots" id="pin-dots">
+      <div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div>
+    </div>
+    <div id="pin-error"></div>
+    <div class="pin-keypad">
+      <button class="pin-key" onclick="pinPress('1')">1</button><button class="pin-key" onclick="pinPress('2')">2</button><button class="pin-key" onclick="pinPress('3')">3</button>
+      <button class="pin-key" onclick="pinPress('4')">4</button><button class="pin-key" onclick="pinPress('5')">5</button><button class="pin-key" onclick="pinPress('6')">6</button>
+      <button class="pin-key" onclick="pinPress('7')">7</button><button class="pin-key" onclick="pinPress('8')">8</button><button class="pin-key" onclick="pinPress('9')">9</button>
+      <button class="pin-key del" onclick="pinDel()">⌫</button><button class="pin-key" onclick="pinPress('0')">0</button><button class="pin-key del" onclick="closePinModal()">✕</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h2 id="edit-modal-title">Add Person</h2>
+    <div class="form-group"><label>Full Name *</label><input id="f-name" type="text" placeholder="e.g. Maria Jurado"></div>
+    <div class="form-group"><label>Birth Year / Date</label><input id="f-birth" type="text" placeholder="e.g. 1945"></div>
+    <div class="form-group"><label>Deceased? (leave blank if living)</label><input id="f-death" type="text" placeholder="e.g. 1998 or Deceased"></div>
+    <div class="form-group"><label>Birthday (optional)</label><input id="f-birthday" type="text" placeholder="e.g. June 8 or 06/08/1931"></div>
+    <div class="form-group"><label>Parent 1 (connects them in the tree)</label><select id="f-parent"><option value="">— No parent / Root —</option></select></div>
+    <div class="form-group"><label>Parent 2 (optional)</label><select id="f-parent2"><option value="">— No second parent —</option></select></div>
+    <div class="form-group"><label>Spouse / Partner (optional)</label><select id="f-spouse"><option value="">— No spouse/partner —</option></select></div>
+    <div style="margin:14px 0 8px;padding:10px 12px;background:var(--bg);border-radius:10px;border:1px dashed var(--card-border);font-size:0.72rem;color:var(--text-soft);line-height:1.5;">
+      <strong style="color:var(--bark);">📋 Contact info</strong> — optional. If added, will be visible to anyone viewing this profile.
+    </div>
+    <div class="form-group"><label>Phone (optional)</label><input id="f-phone" type="tel" placeholder="(209) 555-1234"></div>
+    <div class="form-group"><label>Address / Location (optional)</label><textarea id="f-bio" placeholder="City, State or full address…" style="min-height:48px;"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+      <button id="delete-btn" class="btn-danger" onclick="deletePerson()" style="display:none">Delete</button>
+      <button class="btn-primary" onclick="savePerson()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="debug-modal">
+  <div class="modal" style="max-height:85vh;overflow-y:auto;">
+    <h2>🔍 Connection Debug</h2>
+    <div id="debug-content" style="font-family:monospace;font-size:0.72rem;line-height:1.8;color:var(--text);white-space:pre-wrap;"></div>
+    <div class="modal-actions" style="margin-top:12px;">
+      <button class="btn-primary" onclick="document.getElementById('debug-modal').classList.remove('open')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <h2>⚙ Settings</h2>
+    <div class="form-group"><label>Google Apps Script URL</label><input id="s-url" type="url" placeholder="https://script.google.com/macros/s/…/exec"></div>
+    <p style="font-size:0.73rem;color:var(--text-soft);margin-bottom:10px;line-height:1.5">Paste from your deployed Google Apps Script to sync across devices.</p>
+    <button id="push-btn" onclick="pushAllToSheets()" style="width:100%;background:var(--leaf);color:white;border:none;padding:10px;border-radius:10px;font-family:Lato,sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;margin-bottom:8px;">☁ Push all current data to Sheets</button>
+    <button id="pull-btn" onclick="pullFromSheets()" style="width:100%;background:var(--bark-light);color:white;border:none;padding:10px;border-radius:10px;font-family:Lato,sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;margin-bottom:8px;">↓ Pull data from Sheets (replaces local)</button>
+    <button onclick="showDebug()" style="width:100%;background:none;color:var(--text-soft);border:1.5px solid var(--card-border);padding:10px;border-radius:10px;font-family:Lato,sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;margin-bottom:8px;">🔍 Show connection debug info</button>
+    <button onclick="resetToFresh()" style="width:100%;background:none;color:#c0392b;border:1.5px solid #c0392b;padding:10px;border-radius:10px;font-family:Lato,sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;margin-bottom:14px;">⚠ Reset to clean seed data</button>
+    <div class="form-group"><label>Change Family Edit PIN (4 digits)</label><input id="s-pin" type="password" inputmode="numeric" maxlength="4" placeholder="New universal PIN"></div>
+    <p style="font-size:0.72rem;color:var(--text-soft);margin-bottom:10px;line-height:1.5">⚠ This changes the PIN everyone uses to add or edit people. The admin PIN (used to access this settings page) can only be changed inside the HTML file.</p>
+    <div class="form-group"><label>Tree Title</label><input id="s-title" type="text" placeholder="Mi Familia"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeSettingsModal()">Cancel</button>
+      <button class="btn-primary" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const SEED_DATA=[{"id":"1","name":"Salvador Jurado","birth":"~1929","death":"Deceased","parentId":"","bio":"","phone":"","deceased":true},{"id":"2","name":"Genoveva Jurado","birth":"1931","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"3","name":"Maria de la Luz Villagomez","birth":"1948","death":"Deceased","parentId":"","bio":"","phone":"","deceased":true},{"id":"4","name":"Juan Villagomez Jr","birth":"~1970","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"5","name":"Santi Villagomez Jr","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"6","name":"Leo Villagomez Jr","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"8","name":"Pablo Cesar Villagomez","birth":"~1973","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"9","name":"Pitzy Villagomez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"10","name":"Pablo Villagomez Jr","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"11","name":"Luz Villagomez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"13","name":"Yaret Villagomez","birth":"~1978","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"14","name":"Mauricio Villagomez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"15","name":"Victoria Villagomez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"17","name":"Rosa Araceli Villagomez","birth":"1964","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"18","name":"Ana Luz Villagomez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"20","name":"Salvador Villagomez","birth":"~1974","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"21","name":"Salvador Villagomez Jr","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"22","name":"Mari Fer Villagomez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"24","name":"Leticia Villagomez","birth":"~1968","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"25","name":"Victor Villagomez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"26","name":"Victor Villagomez Jr","birth":"2025","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"27","name":"Alexandra Villagomez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"29","name":"Olga Jurado","birth":"1954","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"30","name":"Sonia Jimenez Ramirez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"31","name":"Laura Jimenez","birth":"~1973","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"32","name":"Maria Jimenez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"33","name":"Yesica Jimenez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"34","name":"Manuel Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"35","name":"Salvador Jurado","birth":"1958","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"36","name":"Trini Jurado","birth":"1961","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"37","name":"Silvia Galvan","birth":"1980","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"38","name":"Mario Galvan","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"39","name":"Mario Galvan Jr","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"40","name":"Noah Galvan","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"41","name":"Armando Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"42","name":"Elizabeth Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"43","name":"Sofia Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"44","name":"Raul Jurado","birth":"1956","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"45","name":"Salvador Jurado Jr","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"46","name":"Maria Garcia","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"47","name":"Raul Jurado Jr","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"48","name":"Yolanda Salazar","birth":"1960","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"49","name":"Marcelino Salazar","birth":"1962","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"50","name":"Joshua Salazar","birth":"1986","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"51","name":"Lynette Salazar","birth":"1986","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"52","name":"Briana Salazar","birth":"2008","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"53","name":"Ariana Salazar","birth":"2011","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"54","name":"Joseph Salazar","birth":"2016","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"55","name":"Jack Salazar","birth":"2018","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"56","name":"Violet Balverde","birth":"1988","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"57","name":"Carlos Balverde","birth":"1988","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"58","name":"Iris Balverde","birth":"2018","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"59","name":"James Salazar","birth":"1991","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"60","name":"Francisco Jurado","birth":"1968","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"61","name":"Dalila Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"62","name":"Jessica Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"63","name":"Jennifer Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"64","name":"Abel Jimenez","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"65","name":"Maria Bernardino","birth":"1964","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"66","name":"Pablo Bernardino","birth":"1960","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"67","name":"Pablo Bernardino Jr","birth":"1993","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"68","name":"Salvador Bernardino","birth":"1994","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"69","name":"Elizabeth Bernardino","birth":"1997","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"70","name":"Arturo Jurado","birth":"1969","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"71","name":"Amanda Bielsky","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"72","name":"Gabriel Bielski","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"73","name":"Justin Jurado","birth":"~1993","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"74","name":"Baby Winnie Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"75","name":"Alison Jurado","birth":"~1998","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"76","name":"Olive Ochoa","birth":"2025","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"77","name":"Juan Jurado","birth":"1971","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"78","name":"Celest Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"79","name":"Crystal Garibay-Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"80","name":"Juan Carlos Garibay-Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"81","name":"Juan Roberto Garibay-Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"82","name":"Juan Alejandro Garibay-Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"83","name":"Jorge Jurado","birth":"1973","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"84","name":"Dominic Jurado","birth":"1998","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"85","name":"Jesus Jurado","birth":"1974","death":"","parentId":"","bio":"","phone":"","deceased":false},{"id":"86","name":"Rachel Jurado","birth":"","death":"","parentId":"","bio":"","phone":"","deceased":false}];
+
+let config={scriptUrl:'',pin:'1234',adminPin:'9999',title:'Mi Familia'};
+let people=[];
+let editingId=null,pinTarget=null,pinBuffer='',unlocked=false,selectedPerson=null,currentView='cards';
+let pinMode='universal'; // 'universal' or 'admin'
+let zoom,svgSel,gSel;
+
+function init(){
+  // Wipe all previous localStorage keys from earlier versions
+  ['ftconfig','ftconfig2','ftconfig3','ftpeople','ftpeople2','ftpeople3'].forEach(k=>localStorage.removeItem(k));
+  loadLocal();
+  applyConfig();
+  switchView('cards');
+  buildSVG();
+  checkSettings();
+  checkDuplicates();
+}
+
+function loadLocal(){
+  try{
+    const c=JSON.parse(localStorage.getItem('ftconfig4')||'{}');
+    config={...config,...c};
+    const p=JSON.parse(localStorage.getItem('ftpeople4')||'null');
+    people=p||JSON.parse(JSON.stringify(SEED_DATA));
+  }catch(e){people=JSON.parse(JSON.stringify(SEED_DATA));}
+}
+function saveLocal(){
+  localStorage.setItem('ftconfig4',JSON.stringify(config));
+  localStorage.setItem('ftpeople4',JSON.stringify(people));
+}
+function applyConfig(){document.querySelector('#header h1').textContent='🌳 '+config.title;document.title=config.title;}
+function checkSettings(){
+  document.getElementById('settings-banner').style.display=config.scriptUrl?'none':'block';
+  // Only auto-pull from Sheets if local has NO people at all (first time setup)
+  // Otherwise local is always the source of truth — use Push button to sync manually
+  if(config.scriptUrl && people.length===0) syncFromSheets();
+}
+
+function switchView(view){
+  currentView=view;
+  document.getElementById('btn-cards').classList.toggle('active',view==='cards');
+  document.getElementById('btn-tree').classList.toggle('active',view==='tree');
+  document.getElementById('btn-stats').classList.toggle('active',view==='stats');
+  document.getElementById('grid-view').style.display=view==='cards'?'block':'none';
+  document.getElementById('canvas').style.display=view==='tree'?'block':'none';
+  document.getElementById('stats-view').style.display=view==='stats'?'block':'none';
+  document.getElementById('zoom-controls').style.display=view==='tree'?'flex':'none';
+  document.getElementById('search-bar').style.display=view==='cards'?'block':'none';
+  document.getElementById('fab').style.display=view==='stats'?'none':'block';
+  document.getElementById('no-tree-msg').style.display='none';
+  if(view==='cards')renderCards();
+  else if(view==='tree')renderTree();
+  else renderStats();
+  closeDetail();
+}
+
+const GROUPS=[
+  {k:'Jurado',label:'Familia Jurado',t:n=>/jurado/i.test(n)},
+  {k:'Villagomez',label:'Familia Villagomez',t:n=>/villagomez/i.test(n)},
+  {k:'Salazar',label:'Familia Salazar',t:n=>/salazar/i.test(n)},
+  {k:'Bernardino',label:'Familia Bernardino',t:n=>/bernardino/i.test(n)},
+  {k:'Galvan',label:'Familia Galvan',t:n=>/galvan/i.test(n)},
+  {k:'Jimenez',label:'Familia Jimenez',t:n=>/jimenez/i.test(n)},
+  {k:'Other',label:'Others / Spouses',t:()=>true},
+];
+
+function renderCards(filter=''){
+  const grid=document.getElementById('grid-view');
+  const q=filter.toLowerCase().trim();
+  const shown=q?people.filter(p=>p.name.toLowerCase().includes(q)):people;
+  if(!shown.length){grid.innerHTML='<div style="text-align:center;padding:40px;color:var(--text-soft);font-family:Playfair Display,serif;">No matches</div>';return;}
+  let html='';
+  if(q){html=shown.map(p=>cardHTML(p)).join('');}
+  else{
+    GROUPS.forEach(grp=>{
+      const members=shown.filter(p=>{
+        if(grp.k==='Other')return!GROUPS.slice(0,-1).some(g=>g.t(p.name));
+        return grp.t(p.name);
+      });
+      if(!members.length)return;
+      html+=`<div class="family-section"><div class="family-heading">${grp.label} <span style="font-family:Lato,sans-serif;font-size:0.72rem;font-weight:400;color:var(--text-soft)">(${members.length})</span></div><div class="family-cards">${members.map(p=>cardHTML(p)).join('')}</div></div>`;
+    });
+  }
+  grid.innerHTML=html;
+}
+
+function cardHTML(p){
+  const icon=p.deceased?'✦':'☀';
+  const parent=people.find(x=>x.id===p.parentId);
+  const parent2=people.find(x=>x.id===p.parent2Id);
+  const spouse=people.find(x=>x.id===p.spouseId);
+  const children=people.filter(x=>x.parentId===p.id||x.parent2Id===p.id);
+  let conn='';
+  if(spouse||parent||parent2||children.length){
+    conn=`<div class="card-connections">`;
+    if(spouse)conn+=`💍 ${trunc(spouse.name,20)}<br>`;
+    if(parent)conn+=`↑ ${trunc(parent.name,20)}<br>`;
+    if(parent2)conn+=`↑ ${trunc(parent2.name,20)}<br>`;
+    if(children.length)conn+=`↓ ${children.length} child${children.length>1?'ren':''}`;
+    conn+=`</div>`;
+  }
+  return `<div class="person-card${p.deceased?' deceased':''}" onclick="openDetail('${p.id}')">
+    ${p.deceased?'<span class="card-deceased-badge">✦ Deceased</span>':''}
+    <div class="card-icon">${icon}</div>
+    <div class="card-name">${p.name}</div>
+    ${p.birth?`<div class="card-birth">b. ${p.birth}</div>`:''}
+    ${p.birthday?`<div class="card-birth" style="color:var(--leaf);">🎂 ${p.birthday}</div>`:''}
+    ${p.bio?`<div class="card-location">📍 ${p.bio}</div>`:''}
+    ${conn}
+  </div>`;
+}
+
+function filterCards(){renderCards(document.getElementById('search-input').value);}
+
+function renderStats(){
+  const el=document.getElementById('stats-view');
+  const total=people.length;
+  const deceased=people.filter(p=>p.deceased||p.death).length;
+  const living=total-deceased;
+  const connected=people.filter(p=>(p.parentId&&people.find(x=>x.id===p.parentId))||(p.parent2Id&&people.find(x=>x.id===p.parent2Id))).length;
+  const unconnected=total-connected;
+  const couples=people.filter(p=>p.spouseId&&people.find(x=>x.id===p.spouseId)).length/2;
+  const withBirthday=people.filter(p=>p.birthday).length;
+  const withBirthYear=people.filter(p=>p.birth).length;
+
+  // Births by decade
+  const decades={};
+  people.forEach(p=>{
+    const yr=parseInt((p.birth||'').replace(/[^0-9]/g,''));
+    if(yr>1800&&yr<2100){const dec=Math.floor(yr/10)*10;decades[dec]=(decades[dec]||0)+1;}
+  });
+  const decadeEntries=Object.entries(decades).sort((a,b)=>a[0]-b[0]);
+
+  // Surname breakdown
+  const surnames={};
+  people.forEach(p=>{
+    const parts=p.name.trim().split(' ');
+    const last=parts[parts.length-1].replace(/[^a-zA-ZÀ-ÿ-]/g,'');
+    if(last.length>1)surnames[last]=(surnames[last]||0)+1;
+  });
+  const topSurnames=Object.entries(surnames).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxSurname=topSurnames[0]?topSurnames[0][1]:1;
+
+  // Locations (group by city/state, ignore full street addresses)
+  const locs={};
+  people.forEach(p=>{
+    if(!p.bio||!p.bio.trim())return;
+    // Normalize: take last two comma-separated parts (city, state) if available
+    const parts=p.bio.trim().split(',').map(s=>s.trim()).filter(Boolean);
+    const key=parts.length>=2?parts.slice(-2).join(', '):parts[0];
+    if(key)locs[key]=(locs[key]||0)+1;
+  });
+  const topLocs=Object.entries(locs).sort((a,b)=>b[1]-a[1]);
+
+  // Family group counts
+  const familyCounts=GROUPS.slice(0,-1).map(g=>({
+    label:g.label.replace('Familia ',''),
+    count:people.filter(p=>g.t(p.name)).length
+  })).filter(g=>g.count>0);
+
+  // Birthdays coming up in the next 30 days
+  const today=new Date();
+  const upcoming=[];
+  people.forEach(p=>{
+    if(!p.birthday||p.deceased||p.death)return;
+    // Try to parse birthday — accept "June 8", "06/08", "6/8", "June 8, 1931" etc.
+    const raw=p.birthday.trim();
+    let month=-1,day=-1;
+    // Try MM/DD or M/D
+    const slashMatch=raw.match(/^(\d{1,2})\/(\d{1,2})/);
+    if(slashMatch){month=parseInt(slashMatch[1])-1;day=parseInt(slashMatch[2]);}
+    // Try "Month D" or "Month D, YYYY"
+    if(month===-1){
+      const monthNames=['january','february','march','april','may','june','july','august','september','october','november','december'];
+      const lower=raw.toLowerCase();
+      const mIdx=monthNames.findIndex(m=>lower.startsWith(m));
+      if(mIdx>=0){
+        month=mIdx;
+        const dayMatch=raw.match(/(\d{1,2})/);
+        if(dayMatch)day=parseInt(dayMatch[1]);
+      }
+    }
+    if(month===-1||day===-1)return;
+    // Find next occurrence of this birthday
+    const thisYear=new Date(today.getFullYear(),month,day);
+    const nextYear=new Date(today.getFullYear()+1,month,day);
+    const next=thisYear>=today?thisYear:nextYear;
+    const daysAway=Math.round((next-today)/(1000*60*60*24));
+    if(daysAway<=30){
+      upcoming.push({name:p.name,birthday:p.birthday,daysAway,date:next,month,day});
+    }
+  });
+  upcoming.sort((a,b)=>a.daysAway-b.daysAway);
+
+  const now=new Date().toLocaleString();
+
+  el.innerHTML=`
+  <div class="stats-section">
+    <div class="stats-heading">🎂 Birthdays in the Next 30 Days</div>
+    ${upcoming.length?`
+    <div style="background:var(--card-bg);border:1.5px solid var(--card-border);border-radius:12px;overflow:hidden;box-shadow:0 1px 6px var(--shadow);">
+      ${upcoming.map((u,i)=>`
+        <div style="display:flex;align-items:center;padding:11px 14px;${i>0?'border-top:1px solid var(--card-border)':''}${u.daysAway===0?';background:linear-gradient(135deg,#f0f8f2,#fffdf9)':''}">
+          <div style="font-size:1.4rem;margin-right:12px;">${u.daysAway===0?'🎉':'🎂'}</div>
+          <div style="flex:1;">
+            <div style="font-family:'Playfair Display',serif;font-size:0.88rem;font-weight:600;color:var(--text);">${u.name}</div>
+            <div style="font-size:0.75rem;color:var(--text-soft);">${u.birthday}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-family:'Playfair Display',serif;font-size:0.95rem;font-weight:700;color:${u.daysAway===0?'var(--leaf)':u.daysAway<=7?'var(--petal-dark)':'var(--bark)'};">${u.daysAway===0?'Today! 🎉':u.daysAway===1?'Tomorrow':u.daysAway+' days'}</div>
+            <div style="font-size:0.7rem;color:var(--text-soft);">${u.date.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+          </div>
+        </div>`).join('')}
+    </div>`:`
+    <div style="background:var(--card-bg);border:1.5px solid var(--card-border);border-radius:12px;padding:20px;text-align:center;color:var(--text-soft);font-size:0.85rem;box-shadow:0 1px 6px var(--shadow);">
+      No birthdays in the next 30 days
+    </div>`}
+  </div>
+  <div class="stats-section">
+    <div class="stats-heading">📊 Overview</div>
+    <div class="stats-grid">
+      <div class="stat-card accent-bark"><div class="stat-number">${total}</div><div class="stat-label">Total Individuals</div></div>
+      <div class="stat-card accent-green"><div class="stat-number">${living}</div><div class="stat-label">Living</div></div>
+      <div class="stat-card accent-grey"><div class="stat-number">${deceased}</div><div class="stat-label">Deceased</div></div>
+      <div class="stat-card accent-gold"><div class="stat-number">${Math.round(couples)}</div><div class="stat-label">Couples / Partners</div></div>
+      <div class="stat-card"><div class="stat-number">${connected}</div><div class="stat-label">Tree Connected</div><div class="stat-sub">${unconnected} not yet linked</div></div>
+      <div class="stat-card accent-green"><div class="stat-number">${withBirthday}</div><div class="stat-label">With Birthday</div><div class="stat-sub">${withBirthYear} have birth year</div></div>
+    </div>
+  </div>
+
+  <div class="stats-section">
+    <div class="stats-heading">👨‍👩‍👧‍👦 By Family Name</div>
+    <div class="stats-grid">
+      ${familyCounts.map(f=>`<div class="stat-card"><div class="stat-number">${f.count}</div><div class="stat-label">${f.label}</div></div>`).join('')}
+    </div>
+  </div>
+
+  <div class="stats-section">
+    <div class="stats-heading">📛 Top Surnames</div>
+    <div class="surname-bar-wrap">
+      ${topSurnames.map(([name,count])=>`
+        <div class="surname-row">
+          <div class="surname-name">${name}</div>
+          <div class="surname-bar-bg"><div class="surname-bar-fill" style="width:${Math.round(count/maxSurname*100)}%"></div></div>
+          <div class="surname-count">${count}</div>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  ${decadeEntries.length?`
+  <div class="stats-section">
+    <div class="stats-heading">📅 Births by Decade</div>
+    <div class="surname-bar-wrap">
+      ${decadeEntries.map(([dec,count])=>{
+        const max=Math.max(...decadeEntries.map(d=>d[1]));
+        return `<div class="surname-row">
+          <div class="surname-name">${dec}s</div>
+          <div class="surname-bar-bg"><div class="surname-bar-fill" style="width:${Math.round(count/max*100)}%;background:var(--leaf);"></div></div>
+          <div class="surname-count">${count}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`:''}
+
+  ${topLocs.length?`
+  <div class="stats-section">
+    <div class="stats-heading">📍 Family Locations</div>
+    <div id="family-map-container" style="background:var(--card-bg);border:1.5px solid var(--card-border);border-radius:12px;overflow:hidden;box-shadow:0 1px 6px var(--shadow);margin-bottom:10px;height:280px;"></div>
+    <div style="background:var(--card-bg);border:1.5px solid var(--card-border);border-radius:12px;box-shadow:0 1px 6px var(--shadow);overflow:hidden;">
+      ${topLocs.map(([loc,count],i)=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;${i>0?'border-top:1px solid var(--card-border)':''}">
+          <span style="font-size:0.82rem;color:var(--text);">📍 ${loc}</span>
+          <span style="font-size:0.75rem;font-weight:700;color:var(--bark);background:var(--bg);padding:3px 10px;border-radius:10px;">${count} ${count===1?'person':'people'}</span>
+        </div>`).join('')}
+    </div>
+    <p style="font-size:0.68rem;color:var(--text-soft);text-align:center;margin-top:6px;">Locations are approximate. Add city/state in Address field for each person.</p>
+  </div>`:''}
+
+  <div class="stats-updated">Last updated: ${now}</div>
+  `;
+
+  // Build Leaflet map after HTML is injected
+  if(topLocs.length) setTimeout(()=>buildLocationMap(topLocs), 50);
+}
+
+// ── Location map ─────────────────────────────────────────────
+let leafletMap=null;
+const GEO={
+  'stockton, ca':[37.9577,-121.2908],'lodi, ca':[38.1302,-121.2724],
+  'san diego, ca':[32.7157,-117.1611],'los angeles, ca':[34.0522,-118.2437],
+  'san jose, ca':[37.3382,-121.8863],'campbell, ca':[37.2872,-121.9499],
+  'fresno, ca':[36.7378,-119.7871],'sacramento, ca':[38.5816,-121.4944],
+  'riverside, ca':[33.9533,-117.3962],'los cabos':[22.8905,-109.9167],
+  'mexico':[23.6345,-102.5528],'austin, tx':[30.2672,-97.7431],
+  'colorado springs, co':[38.8339,-104.8214],'freudenberg, germany':[50.8983,7.8736],
+  'brooklyn, ny':[40.6782,-73.9442],'new york, ny':[40.7128,-74.0060],
+  'seattle, wa':[47.6062,-122.3321],'chicago, il':[41.8781,-87.6298],
+  'houston, tx':[29.7604,-95.3698],'phoenix, az':[33.4484,-112.0740],
+  'las vegas, nv':[36.1699,-115.1398],'portland, or':[45.5051,-122.6750],
+  'denver, co':[39.7392,-104.9903],'miami, fl':[25.7617,-80.1918],
+  'brooklyn':[40.6782,-73.9442],'germany':[51.1657,10.4515],
+};
+
+function buildLocationMap(topLocs){
+  const container=document.getElementById('family-map-container');
+  if(!container||typeof L==='undefined')return;
+  if(leafletMap){leafletMap.remove();leafletMap=null;}
+
+  const points=[];
+  topLocs.forEach(([loc,count])=>{
+    const key=loc.toLowerCase().trim();
+    let coords=GEO[key];
+    if(!coords){
+      const match=Object.entries(GEO).find(([k])=>key.includes(k)||k.includes(key));
+      if(match)coords=match[1];
+    }
+    if(coords)points.push({loc,count,lat:coords[0],lng:coords[1]});
+  });
+
+  if(!points.length){
+    container.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-soft);font-size:0.82rem;padding:20px;text-align:center;">No recognizable locations yet.<br>Add city, state to Address fields to see pins.</div>';
+    return;
+  }
+
+  leafletMap=L.map(container,{zoomControl:true,scrollWheelZoom:false});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',maxZoom:18
+  }).addTo(leafletMap);
+
+  const mkIcon=count=>L.divIcon({
+    className:'',
+    html:`<div style="background:#5c3d2e;color:#e8c4a0;border-radius:50%;width:${count>4?36:count>1?30:24}px;height:${count>4?36:count>1?30:24}px;display:flex;align-items:center;justify-content:center;font-family:Lato,sans-serif;font-weight:700;font-size:0.72rem;border:2px solid #e8c4a0;box-shadow:0 2px 6px rgba(0,0,0,0.35);">${count}</div>`,
+    iconSize:[32,32],iconAnchor:[16,16]
+  });
+
+  const bounds=[];
+  points.forEach(pt=>{
+    bounds.push([pt.lat,pt.lng]);
+    L.marker([pt.lat,pt.lng],{icon:mkIcon(pt.count)})
+      .addTo(leafletMap)
+      .bindPopup(`<strong style="font-family:'Playfair Display',serif;">${pt.loc}</strong><br>${pt.count} ${pt.count===1?'person':'people'}`);
+  });
+
+  if(bounds.length===1) leafletMap.setView(bounds[0],8);
+  else leafletMap.fitBounds(bounds,{padding:[30,30]});
+}
+
+const NW=160,NH=72,SPOUSE_GAP=14,HGAP=28,VGAP=120;
+function buildSVG(){svgSel=d3.select('#tree-svg');gSel=svgSel.append('g');zoom=d3.zoom().scaleExtent([0.05,3]).on('zoom',e=>gSel.attr('transform',e.transform));svgSel.call(zoom);}
+
+function renderTree(){
+  gSel.selectAll('*').remove();
+
+  const hasParent = p => p.parentId && people.find(x => x.id === p.parentId);
+  const hasChild  = p => people.some(x => x.parentId === p.id || x.parent2Id === p.id);
+
+  // Collect everyone who belongs in the tree
+  // Start with anyone who has a parent or child link
+  const inTree = new Set();
+  people.forEach(p => { if(hasParent(p) || hasChild(p)) inTree.add(p.id); });
+
+  // Walk UP the parent chain — include ancestors even if they have no child flag set
+  let treeGrew = true;
+  while(treeGrew){
+    treeGrew = false;
+    people.forEach(p => {
+      if(!inTree.has(p.id)) return;
+      // Add parent1
+      if(p.parentId && p.parentId.trim()){
+        const par = people.find(x => x.id === p.parentId);
+        if(par && !inTree.has(par.id)){ inTree.add(par.id); treeGrew = true; }
+      }
+      // Add parent2
+      if(p.parent2Id && p.parent2Id.trim()){
+        const par2 = people.find(x => x.id === p.parent2Id);
+        if(par2 && !inTree.has(par2.id)){ inTree.add(par2.id); treeGrew = true; }
+      }
+    });
+  }
+
+  // Include spouses of anyone in the tree
+  people.forEach(p => { if(inTree.has(p.id) && p.spouseId) inTree.add(p.spouseId); });
+
+  if(!inTree.size){ document.getElementById('no-tree-msg').style.display='block'; return; }
+  document.getElementById('no-tree-msg').style.display='none';
+
+  const tp = people.filter(p => inTree.has(p.id));
+
+  // ── Step 1: assign generation numbers ────────────────────────
+  const gen = {};
+
+  // Roots = in-tree people with no parent in the tree
+  // BUT spouses of someone with a known gen inherit that gen, not gen 0
+  const structuralRoots = tp.filter(p => !hasParent(p) && !( p.spouseId && tp.find(x=>x.id===p.spouseId && hasParent(x)) ));
+  structuralRoots.forEach(p => { if(gen[p.id] === undefined) gen[p.id] = 0; });
+
+  // Propagate downward
+  let changed = true;
+  while(changed){
+    changed = false;
+    tp.forEach(p => {
+      const p1 = p.parentId  && gen[p.parentId]  !== undefined ? gen[p.parentId]  : null;
+      const p2 = p.parent2Id && gen[p.parent2Id] !== undefined ? gen[p.parent2Id] : null;
+      const parentGen = p1!==null && p2!==null ? Math.max(p1,p2) : p1!==null ? p1 : p2!==null ? p2 : null;
+      if(parentGen !== null){
+        const desired = parentGen + 1;
+        if(gen[p.id] === undefined || gen[p.id] < desired){ gen[p.id] = desired; changed = true; }
+      }
+    });
+    // Spouses always share the same generation as their partner
+    tp.forEach(p => {
+      if(p.spouseId && gen[p.spouseId] !== undefined && gen[p.id] !== gen[p.spouseId]){
+        const target = gen[p.spouseId];
+        if(gen[p.id] === undefined || gen[p.id] !== target){ gen[p.id] = target; changed = true; }
+      }
+    });
+  }
+
+  // Fallback for anything still unresolved
+  tp.forEach(p => { if(gen[p.id] === undefined) gen[p.id] = 0; });
+
+  // ── Step 2: build couple units ───────────────────────────────
+  // Key rule: a person who is someone's spouse should ONLY appear as
+  // the sid of that person's unit, never as their own separate unit.
+  const isSpouseOf = new Map(); // id → their partner's id
+  tp.forEach(p => { if(p.spouseId && inTree.has(p.spouseId)) isSpouseOf.set(p.spouseId, p.id); });
+
+  const paired = new Set();
+  const units  = [];
+
+  function getChildren(pid, sid){
+    return tp.filter(p => {
+      const byP1 = p.parentId  === pid || (sid && p.parentId  === sid);
+      const byP2 = p.parent2Id === pid || (sid && p.parent2Id === sid);
+      return byP1 || byP2;
+    }).map(p => p.id);
+  }
+
+  const maxGen = Math.max(...Object.values(gen));
+  for(let g = 0; g <= maxGen; g++){
+    tp.filter(p => gen[p.id] === g).forEach(p => {
+      // Check at iteration time (not filter time) so we catch people
+      // who got paired as sid during this same generation loop
+      if(paired.has(p.id)) return;
+
+      // If someone else has already claimed this person as their spouse
+      // and that partner has a lower id (so they come first), skip —
+      // the partner's iteration will attach this person as sid
+      if(isSpouseOf.has(p.id)){
+        const partnerId = isSpouseOf.get(p.id);
+        if(!paired.has(partnerId) && partnerId < p.id) return;
+      }
+
+      paired.add(p.id);
+      const sid = p.spouseId && inTree.has(p.spouseId) && !paired.has(p.spouseId) ? p.spouseId : null;
+      if(sid) paired.add(sid);
+      units.push({ pid: p.id, sid, generation: g, childIds: getChildren(p.id, sid) });
+    });
+  }
+
+  // ── Step 3: subtree widths ───────────────────────────────────
+  const UNIT_W = NW * 2 + SPOUSE_GAP;
+  const SOLO_W = NW;
+  function uw(u){ return u.sid ? UNIT_W : SOLO_W; }
+
+  function subtreeWidth(uid){
+    const u = units.find(x => x.pid === uid || x.sid === uid);
+    if(!u) return SOLO_W;
+    const cu = u.childIds.map(cid => units.find(x => x.pid === cid || x.sid === cid)).filter(Boolean);
+    if(!cu.length) return uw(u);
+    const childW = cu.reduce((s,c) => s + subtreeWidth(c.pid) + HGAP, 0) - HGAP;
+    return Math.max(uw(u), childW);
+  }
+
+  // ── Step 4: place units (X varies, Y = generation × ROW_H) ──
+  const ROW_H = NH + VGAP;
+  const posById = {};
+
+  function placeUnit(uid, cx){
+    const u = units.find(x => x.pid === uid || x.sid === uid);
+    if(!u || posById[u.pid]) return;
+    const y    = u.generation * ROW_H;
+    const halfW = uw(u) / 2;
+    posById[u.pid] = { x: cx - halfW, y };
+    if(u.sid) posById[u.sid] = { x: cx - halfW + NW + SPOUSE_GAP, y };
+
+    const cu = u.childIds.map(cid => units.find(x => x.pid === cid || x.sid === cid)).filter(Boolean);
+    if(!cu.length) return;
+    const totalW = cu.reduce((s,c) => s + subtreeWidth(c.pid) + HGAP, 0) - HGAP;
+    let x2 = cx - totalW / 2;
+    cu.forEach(c => { const sw = subtreeWidth(c.pid); placeUnit(c.pid, x2 + sw/2); x2 += sw + HGAP; });
+  }
+
+  const rootUnits = units.filter(u => u.generation === 0);
+  let startX = 0;
+  rootUnits.forEach(ru => {
+    const sw = subtreeWidth(ru.pid);
+    placeUnit(ru.pid, startX + sw/2);
+    startX += sw + HGAP * 3;
+  });
+  // Place anything still unplaced
+  units.forEach(u => {
+    if(!posById[u.pid]){
+      const sw = subtreeWidth(u.pid);
+      placeUnit(u.pid, startX + sw/2);
+      startX += sw + HGAP * 3;
+    }
+  });
+
+  // Safety snap: ensure every node's Y matches its generation row
+  Object.entries(posById).forEach(([id, pos]) => {
+    if(gen[id] !== undefined) pos.y = gen[id] * ROW_H;
+  });
+
+  // ── Step 5: generation row bands ─────────────────────────────
+  for(let g = 0; g <= maxGen; g++){
+    const y = g * ROW_H - 10;
+    gSel.append('rect').attr('x',-9999).attr('y',y).attr('width',19998).attr('height',NH+20)
+      .attr('fill', g%2===0 ? 'rgba(92,61,46,0.03)' : 'rgba(92,61,46,0.06)');
+    gSel.append('text').attr('x',-9960).attr('y',y+NH/2+5)
+      .attr('fill','rgba(92,61,46,0.22)').attr('font-family','Playfair Display,serif').attr('font-size','11px')
+      .text(`Gen ${g+1}`);
+  }
+
+  // ── Step 6: draw lines ───────────────────────────────────────
+  units.forEach(u => {
+    const pp = posById[u.pid];
+    if(!pp) return;
+
+    // For couples, drop line from exact midpoint of the spouse connector gap
+    // For solos, drop from center of the single card
+    let unitMidX;
+    if(u.sid){
+      const sp = posById[u.sid];
+      if(sp){
+        // Midpoint is between right edge of primary card and left edge of spouse card
+        unitMidX = (pp.x + NW + sp.x) / 2;
+      } else {
+        unitMidX = pp.x + NW / 2;
+      }
+    } else {
+      unitMidX = pp.x + NW / 2;
+    }
+    const parentBottomY = pp.y + NH;
+
+    // Spouse connector (gold horizontal line + 💍)
+    if(u.sid){
+      const sp = posById[u.sid];
+      if(sp){
+        const x1=pp.x+NW, y1=pp.y+NH/2, x2=sp.x, y2=sp.y+NH/2;
+        gSel.append('line').attr('class','spouse-link').attr('x1',x1).attr('y1',y1).attr('x2',x2).attr('y2',y2);
+        gSel.append('text').attr('class','spouse-heart').attr('x',(x1+x2)/2).attr('y',y1-9).text('💍');
+      }
+    }
+
+    // Parent → children elbow lines
+    const placedChildren = u.childIds.map(cid => ({ cid, pos: posById[cid] })).filter(c => c.pos);
+    if(!placedChildren.length) return;
+
+    const childY = placedChildren[0].pos.y;
+    const midY   = parentBottomY + (childY - parentBottomY) / 2;
+
+    // Vertical stem down from couple/parent midpoint
+    gSel.append('line').attr('class','link')
+      .attr('x1',unitMidX).attr('y1',parentBottomY).attr('x2',unitMidX).attr('y2',midY);
+
+    if(placedChildren.length > 1){
+      const leftX  = Math.min(...placedChildren.map(c => c.pos.x + NW/2));
+      const rightX = Math.max(...placedChildren.map(c => c.pos.x + NW/2));
+      gSel.append('line').attr('class','link').attr('x1',leftX).attr('y1',midY).attr('x2',rightX).attr('y2',midY);
+    }
+
+    placedChildren.forEach(({ cid, pos: cp }) => {
+      const childMidX = cp.x + NW/2;
+      gSel.append('line').attr('class','link')
+        .attr('x1',childMidX).attr('y1',midY).attr('x2',childMidX).attr('y2',cp.y);
+      // No dashed parent2 lines — children connected to a couple are shown via the couple's drop line
+    });
+  });
+
+  // ── Step 7: draw nodes ───────────────────────────────────────
+  Object.entries(posById).forEach(([id, pos]) => {
+    const p = people.find(x => x.id === id);
+    if(!p) return;
+    const g = gSel.append('g')
+      .attr('class','node-group' + (p.deceased ? ' deceased-node' : ''))
+      .attr('transform',`translate(${pos.x},${pos.y})`)
+      .on('click', () => openDetail(id));
+    g.append('rect').attr('class','node-card').attr('width',NW).attr('height',NH).attr('rx',10).attr('ry',10);
+    g.append('text').attr('class','node-icon').attr('x',NW/2).attr('y',18).text(p.deceased ? '✦' : '☀');
+    g.append('text').attr('class','node-name').attr('x',NW/2).attr('y',37).text(trunc(p.name,18));
+    g.append('text').attr('class','node-dates').attr('x',NW/2).attr('y',54).text(p.birth ? `b. ${p.birth}` : '');
+    if(p.deceased) g.append('text').attr('class','node-dates').attr('x',NW/2).attr('y',65)
+      .text(p.death && p.death !== 'Deceased' ? `d. ${p.death}` : '');
+  });
+
+  // ── Step 8: center view ──────────────────────────────────────
+  const allX = Object.values(posById).map(n => n.x);
+  const allY = Object.values(posById).map(n => n.y);
+  const svgEl = document.getElementById('tree-svg');
+  const w = svgEl.clientWidth, h = svgEl.clientHeight;
+  const treeW = Math.max(...allX) - Math.min(...allX) + NW;
+  const treeH = Math.max(...allY) - Math.min(...allY) + NH;
+  const sc    = Math.min(0.9, (w-40)/treeW, (h-80)/treeH);
+  const midX  = (Math.min(...allX) + Math.max(...allX))/2 + NW/2;
+  const midY  = (Math.min(...allY) + Math.max(...allY))/2 + NH/2;
+  svgSel.call(zoom.transform, d3.zoomIdentity.translate(w/2-midX*sc, h/2-midY*sc).scale(sc));
+}
+function zoomIn(){svgSel.transition().call(zoom.scaleBy,1.4);}
+function zoomOut(){svgSel.transition().call(zoom.scaleBy,0.7);}
+function zoomReset(){renderTree();}
+
+function openDetail(id){
+  const p=people.find(x=>x.id===id);if(!p)return;selectedPerson=p;
+  document.getElementById('detail-name').textContent=p.name;
+  let meta='';if(p.birth)meta+=`b. ${p.birth}`;if(p.death)meta+=(meta?' · ':'')+(p.death==='Deceased'?'✦ Deceased':`d. ${p.death}`);
+  document.getElementById('detail-meta').textContent=meta;
+  document.getElementById('detail-phone').textContent=p.phone?'📞 '+p.phone:'';
+  let bioLine=p.birthday?'🎂 Birthday: '+p.birthday:'';
+  if(p.bio&&p.bio.trim())bioLine+=(bioLine?'  ·  ':'')+'📍 '+p.bio.trim();
+  document.getElementById('detail-bio').textContent=bioLine;
+  const parent=people.find(x=>x.id===p.parentId);
+  const parent2=people.find(x=>x.id===p.parent2Id);
+  const spouse=people.find(x=>x.id===p.spouseId);
+  const children=people.filter(x=>x.parentId===p.id||x.parent2Id===p.id);
+  let rel='';
+  if(spouse)rel+=`<span class="spouse-tag">💍 Spouse/Partner:</span> ${spouse.name}<br>`;
+  if(parent)rel+=`<span>Parent 1:</span> ${parent.name}<br>`;
+  if(parent2)rel+=`<span>Parent 2:</span> ${parent2.name}<br>`;
+  if(children.length)rel+=`<span>Children:</span> ${children.map(c=>c.name).join(', ')}`;
+  document.getElementById('detail-relations').innerHTML=rel;
+  document.getElementById('detail-panel').classList.add('open');
+}
+function closeDetail(){document.getElementById('detail-panel').classList.remove('open');selectedPerson=null;}
+
+function requirePin(cb){if(unlocked){cb();return;}pinMode='universal';pinTarget=cb;pinBuffer='';updatePinDots();document.getElementById('pin-modal-title').textContent='🔒 Enter PIN to Edit';document.getElementById('pin-subtitle').textContent='Enter the family edit PIN to continue.';document.getElementById('pin-error').textContent='';document.getElementById('pin-modal').classList.add('open');}
+function requireAdminPin(cb){pinMode='admin';pinTarget=cb;pinBuffer='';updatePinDots();document.getElementById('pin-modal-title').textContent='🔐 Admin PIN Required';document.getElementById('pin-subtitle').textContent='Enter the admin PIN to access settings.';document.getElementById('pin-error').textContent='';document.getElementById('pin-modal').classList.add('open');}
+function pinPress(d){if(pinBuffer.length>=4)return;pinBuffer+=d;updatePinDots();if(pinBuffer.length===4)setTimeout(checkPin,150);}
+function pinDel(){pinBuffer=pinBuffer.slice(0,-1);updatePinDots();document.getElementById('pin-error').textContent='';}
+function updatePinDots(){for(let i=0;i<4;i++)document.getElementById('d'+i).classList.toggle('filled',i<pinBuffer.length);}
+function checkPin(){
+  const correct=pinMode==='admin'?config.adminPin:config.pin;
+  if(pinBuffer===correct){
+    if(pinMode==='universal')unlocked=true;
+    document.getElementById('pin-modal').classList.remove('open');
+    if(typeof pinTarget==='function')pinTarget();pinTarget=null;
+  }else{
+    document.getElementById('pin-error').textContent='Incorrect PIN. Try again.';pinBuffer='';updatePinDots();
+  }
+}
+function closePinModal(){document.getElementById('pin-modal').classList.remove('open');pinBuffer='';pinTarget=null;}
+
+function openAddModal(){requirePin(()=>{editingId=null;document.getElementById('edit-modal-title').textContent='Add Person';['f-name','f-birth','f-death','f-birthday','f-phone','f-bio'].forEach(id=>document.getElementById(id).value='');document.getElementById('delete-btn').style.display='none';populateParentSelect(null);populateParent2Select(null);populateSpouseSelect(null);document.getElementById('edit-modal').classList.add('open');});}
+
+function editSelected(){if(!selectedPerson)return;const personId=selectedPerson.id;requirePin(()=>{closeDetail();editingId=personId;const p=people.find(x=>x.id===editingId);if(!p)return;document.getElementById('edit-modal-title').textContent='Edit Person';document.getElementById('f-name').value=p.name;document.getElementById('f-birth').value=p.birth||'';document.getElementById('f-death').value=p.death||'';document.getElementById('f-birthday').value=p.birthday||'';document.getElementById('f-phone').value=p.phone||'';document.getElementById('f-bio').value=p.bio||'';document.getElementById('delete-btn').style.display='inline-block';populateParentSelect(p.parentId);populateParent2Select(p.parent2Id||'');populateSpouseSelect(p.spouseId||'');document.getElementById('edit-modal').classList.add('open');});}
+function populateParentSelect(cur){const sel=document.getElementById('f-parent');sel.innerHTML='<option value="">— No parent / Root —</option>';[...people].sort((a,b)=>a.name.localeCompare(b.name)).forEach(p=>{if(p.id===editingId)return;const o=document.createElement('option');o.value=p.id;o.textContent=p.name;if(p.id===cur)o.selected=true;sel.appendChild(o);});}
+function populateParent2Select(cur){const sel=document.getElementById('f-parent2');sel.innerHTML='<option value="">— No second parent —</option>';[...people].sort((a,b)=>a.name.localeCompare(b.name)).forEach(p=>{if(p.id===editingId)return;const o=document.createElement('option');o.value=p.id;o.textContent=p.name;if(p.id===cur)o.selected=true;sel.appendChild(o);});}
+function populateSpouseSelect(cur){const sel=document.getElementById('f-spouse');sel.innerHTML='<option value="">— No spouse/partner —</option>';[...people].sort((a,b)=>a.name.localeCompare(b.name)).forEach(p=>{if(p.id===editingId)return;const o=document.createElement('option');o.value=p.id;o.textContent=p.name;if(p.id===cur)o.selected=true;sel.appendChild(o);});}
+function closeEditModal(){document.getElementById('edit-modal').classList.remove('open');}
+
+function savePerson(){
+  const name=document.getElementById('f-name').value.trim();if(!name){showToast('Name is required');return;}
+  const death=document.getElementById('f-death').value.trim();
+  const newSpouseId=document.getElementById('f-spouse').value;
+  const data={name,birth:document.getElementById('f-birth').value.trim(),death,birthday:document.getElementById('f-birthday').value.trim(),parentId:document.getElementById('f-parent').value,parent2Id:document.getElementById('f-parent2').value,spouseId:newSpouseId,phone:document.getElementById('f-phone').value.trim(),bio:document.getElementById('f-bio').value.trim(),deceased:!!death};
+  if(editingId){
+    const idx=people.findIndex(p=>p.id===editingId);
+    const oldSpouseId=people[idx].spouseId||'';
+    // Remove old mutual link
+    if(oldSpouseId&&oldSpouseId!==newSpouseId){const os=people.find(p=>p.id===oldSpouseId);if(os)os.spouseId='';}
+    people[idx]={...people[idx],...data};
+    showToast('Updated!');
+  } else {
+    data.id=Date.now().toString();people.push(data);showToast('Added!');
+  }
+  // Set mutual spouse link
+  if(newSpouseId){const sp=people.find(p=>p.id===newSpouseId);if(sp)sp.spouseId=editingId||people[people.length-1].id;}
+  saveLocal();syncToSheets();closeEditModal();
+  checkDuplicates();
+  if(currentView==='cards')renderCards(document.getElementById('search-input').value);
+  else if(currentView==='tree')renderTree();
+  else renderStats();
+}
+function deletePerson(){if(!editingId)return;if(!confirm('Delete this person?'))return;people.forEach(p=>{if(p.parentId===editingId)p.parentId='';if(p.parent2Id===editingId)p.parent2Id='';});people=people.filter(p=>p.id!==editingId);saveLocal();syncToSheets();closeEditModal();checkDuplicates();if(currentView==='cards')renderCards();else if(currentView==='tree')renderTree();else renderStats();showToast('Deleted.');}
+
+function openSettingsModal(){requireAdminPin(()=>{document.getElementById('s-url').value=config.scriptUrl||'';document.getElementById('s-pin').value='';document.getElementById('s-title').value=config.title||'Mi Familia';document.getElementById('settings-modal').classList.add('open');});}
+function closeSettingsModal(){document.getElementById('settings-modal').classList.remove('open');}
+function saveSettings(){const url=document.getElementById('s-url').value.trim();const pin=document.getElementById('s-pin').value.trim();const title=document.getElementById('s-title').value.trim()||'Mi Familia';config.scriptUrl=url;if(pin.length===4&&/^\d{4}$/.test(pin)){config.pin=pin;unlocked=false;}else if(pin.length>0){showToast('PIN must be 4 digits');return;}config.title=title;saveLocal();applyConfig();closeSettingsModal();checkSettings();showToast('Settings saved!');}
+
+async function syncToSheets(){if(!config.scriptUrl)return;try{await fetch(config.scriptUrl,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'set',people})});}catch(e){}}
+
+async function pushAllToSheets(){
+  if(!config.scriptUrl){showToast('No Sheets URL configured');return;}
+  const btn=document.getElementById('push-btn');
+  btn.textContent='Pushing…';btn.disabled=true;
+  try{
+    await fetch(config.scriptUrl,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'set',people})});
+    showToast('✓ All data pushed to Sheets!');
+  }catch(e){showToast('Push failed — check your URL');}
+  btn.textContent='☁ Push all current data to Sheets';btn.disabled=false;
+  closeSettingsModal();
+}
+
+async function pullFromSheets(){
+  if(!config.scriptUrl){showToast('No Sheets URL configured');return;}
+  if(!confirm('This will replace all local data with whatever is in Google Sheets. Continue?'))return;
+  const btn=document.getElementById('pull-btn');
+  btn.textContent='Pulling…';btn.disabled=true;
+  try{
+    const res=await fetch(config.scriptUrl+'?action=get',{mode:'cors'});
+    const data=await res.json();
+    if(data&&data.people&&data.people.length){
+      // Deduplicate by id
+      const seenIds=new Set();
+      people=data.people.filter(p=>{
+        if(!p.id||seenIds.has(p.id))return false;
+        seenIds.add(p.id);return true;
+      });
+      saveLocal();
+      if(currentView==='cards')renderCards();
+      else if(currentView==='tree')renderTree();
+      else renderStats();
+      checkDuplicates();
+      showToast('✓ Data pulled from Sheets!');
+    }else{showToast('Sheet appears empty');}
+  }catch(e){showToast('Pull failed — check your URL');}
+  btn.textContent='↓ Pull data from Sheets (replaces local)';btn.disabled=false;
+  closeSettingsModal();
+}
+
+function showDebug(){
+  closeSettingsModal();
+  const connected = people.filter(p => p.parentId || p.parent2Id || p.spouseId);
+  let out = `TOTAL PEOPLE: ${people.length}\nCONNECTED: ${connected.length}\n\n`;
+  out += `── PEOPLE WITH CONNECTIONS ──\n`;
+  connected.forEach(p => {
+    const par  = p.parentId  ? people.find(x=>x.id===p.parentId)  : null;
+    const par2 = p.parent2Id ? people.find(x=>x.id===p.parent2Id) : null;
+    const sp   = p.spouseId  ? people.find(x=>x.id===p.spouseId)  : null;
+    out += `\n${p.name} (id:${p.id})\n`;
+    out += `  Parent1: ${par  ? par.name+' ✓'  : p.parentId  ? '⚠ ID NOT FOUND: '+p.parentId  : 'none'}\n`;
+    out += `  Parent2: ${par2 ? par2.name+' ✓' : p.parent2Id ? '⚠ ID NOT FOUND: '+p.parent2Id : 'none'}\n`;
+    out += `  Spouse:  ${sp   ? sp.name+' ✓'   : p.spouseId  ? '⚠ ID NOT FOUND: '+p.spouseId  : 'none'}\n`;
+  });
+  out += `\n── PEOPLE WHO ARE PARENTS ──\n`;
+  const parents = people.filter(p => people.some(x => x.parentId===p.id || x.parent2Id===p.id));
+  parents.forEach(p => {
+    const kids = people.filter(x => x.parentId===p.id || x.parent2Id===p.id);
+    out += `\n${p.name} (id:${p.id}) → children: ${kids.map(k=>k.name).join(', ')}\n`;
+  });
+  document.getElementById('debug-content').textContent = out;
+  document.getElementById('debug-modal').classList.add('open');
+}
+
+function resetToFresh(){
+  if(!confirm('This will wipe all local data and connections, resetting to the original 80 family members with no connections. This cannot be undone. Continue?'))return;
+  ['ftconfig4','ftpeople4'].forEach(k=>localStorage.removeItem(k));
+  people=JSON.parse(JSON.stringify(SEED_DATA));
+  saveLocal();
+  closeSettingsModal();
+  if(currentView==='cards')renderCards();
+  else if(currentView==='tree')renderTree();
+  else renderStats();
+  checkDuplicates();
+  showToast('Reset to clean data ✓');
+}
+
+async function syncFromSheets(){
+  if(!config.scriptUrl)return;
+  try{
+    const res=await fetch(config.scriptUrl+'?action=get',{mode:'cors'});
+    const data=await res.json();
+    if(data&&data.people&&data.people.length){
+      const seenIds=new Set();
+      people=data.people.filter(p=>{
+        if(!p.id||seenIds.has(p.id))return false;
+        seenIds.add(p.id);return true;
+      });
+      saveLocal();
+      if(currentView==='cards')renderCards();
+      else if(currentView==='tree')renderTree();
+      else renderStats();
+      showToast('Loaded from Sheets ✓');
+    }
+  }catch(e){}
+  checkDuplicates();
+}
+
+function checkDuplicates(){
+  const nameCounts={};
+  people.forEach(p=>{
+    const key=p.name.trim().toLowerCase();
+    if(!nameCounts[key])nameCounts[key]=[];
+    nameCounts[key].push(p);
+  });
+  const dupes=Object.values(nameCounts).filter(g=>g.length>1);
+  const banner=document.getElementById('duplicate-banner');
+  const msg=document.getElementById('duplicate-msg');
+  const link=document.getElementById('duplicate-link');
+  if(!dupes.length){banner.style.display='none';return;}
+  const names=[...new Set(dupes.map(g=>g[0].name.trim()))];
+  msg.textContent=`⚠ Duplicate names found: ${names.join(', ')}`;
+  link.onclick=()=>{
+    // Switch to cards and search for first duplicate
+    switchView('cards');
+    const searchInput=document.getElementById('search-input');
+    searchInput.value=names[0];
+    filterCards();
+    banner.style.display='none';
+  };
+  banner.style.display='block';
+  // Adjust top of other banners if settings banner also showing
+  banner.style.top=document.getElementById('settings-banner').style.display!=='none'?'72px':'52px';
+}
+
+function trunc(s,n){return s&&s.length>n?s.slice(0,n-1)+'…':s||'';}
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+let ty0=0;
+document.getElementById('detail-panel').addEventListener('touchstart',e=>{ty0=e.touches[0].clientY;});
+document.getElementById('detail-panel').addEventListener('touchmove',e=>{if(e.touches[0].clientY-ty0>70)closeDetail();});
+
+window.addEventListener('load',init);
+window.addEventListener('resize',()=>{if(currentView==='tree')renderTree();});
+</script>
+</body>
+</html>
